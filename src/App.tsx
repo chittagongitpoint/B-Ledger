@@ -551,6 +551,17 @@ export default function App() {
     }
   };
 
+  // Auto-sync effect
+  useEffect(() => {
+    if (!settings.googleSheetUrl || !isLoggedIn) return;
+    
+    const timer = setTimeout(() => {
+      syncToCloud();
+    }, 2000); // 2 second debounce to prevent rapid-fire syncing
+
+    return () => clearTimeout(timer);
+  }, [transactions, manualCustomers, settings.systemName, settings.userName, settings.mobile]);
+
   const handleUpdateSettings = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
