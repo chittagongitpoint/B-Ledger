@@ -253,6 +253,7 @@ export default function App() {
   const [isCustomerFormOpen, setIsCustomerFormOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [editingCategory, setEditingCategory] = useState<TransactionCategory | null>(null);
+  const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [selectedCustomer, setSelectedCustomer] = useState<string | null>(null);
   
   // Notification system
@@ -290,7 +291,8 @@ export default function App() {
     
     // Initialize with manual customers
     manualCustomers.forEach(c => {
-      customerMap[c.name] = { ...c, currentBalance: 0 };
+      const normalizedName = c.name.trim();
+      customerMap[normalizedName] = { ...c, name: normalizedName, currentBalance: 0 };
     });
 
     // Sort transactions chronologically
@@ -298,28 +300,31 @@ export default function App() {
 
     sortedTs.forEach(t => {
       if (t.customerName) {
-        if (!customerMap[t.customerName]) {
-          customerMap[t.customerName] = {
+        const normalizedName = t.customerName.trim();
+        if (!customerMap[normalizedName]) {
+          customerMap[normalizedName] = {
             id: generateId(),
-            name: t.customerName,
+            name: normalizedName,
             currentBalance: 0,
             createdAt: t.createdAt,
             updatedAt: t.updatedAt
           };
         }
         
-        if (t.type === 'customer_due') {
-          customerMap[t.customerName].currentBalance += t.amount;
-        } else if (t.type === 'customer_payment') {
-          customerMap[t.customerName].currentBalance -= t.amount;
+        const cat = getCategory(t.type);
+        // Balance increases on money "OUT" (Due/Credit) and decreases on money "IN" (Payment)
+        if (cat.direction === 'out') {
+          customerMap[normalizedName].currentBalance += t.amount;
+        } else {
+          customerMap[normalizedName].currentBalance -= t.amount;
         }
         
-        customerMap[t.customerName].updatedAt = t.updatedAt;
+        customerMap[normalizedName].updatedAt = t.updatedAt;
       }
     });
 
     return Object.values(customerMap);
-  }, [transactions, manualCustomers]);
+  }, [transactions, manualCustomers, categories]);
 
   // Totals
   const totals = useMemo(() => {
@@ -370,7 +375,7 @@ export default function App() {
     const now = new Date().toISOString();
     
     const type = formData.get('type') as TransactionType;
-    const customerName = formData.get('customerName') as string;
+    const customerName = (formData.get('customerName') as string)?.trim();
 
     if ((type === 'customer_payment' || type === 'customer_due') && !customerName) {
       alert('Customer name is required for credit/payment transactions.');
@@ -417,20 +422,51 @@ export default function App() {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     const now = new Date().toISOString();
+    const name = (formData.get('name') as string).trim();
     
-    const newCustomer: Customer = {
-      id: generateId(),
-      name: formData.get('name') as string,
-      phone: formData.get('phone') as string || undefined,
-      address: formData.get('address') as string || undefined,
-      currentBalance: 0,
-      createdAt: now,
-      updatedAt: now
-    };
+    if (editingCustomer) {
+      setManualCustomers(prev => prev.map(c => 
+        c.id === editingCustomer.id 
+          ? { 
+              ...c, 
+              name, 
+              phone: (formData.get('phone') as string).trim() || undefined, 
+              address: (formData.get('address') as string).trim() || undefined,
+              updatedAt: now 
+            } 
+          : c
+      ));
+      setEditingCustomer(null);
+      showToast('Customer updated successfully');
+    } else {
+      const newCustomer: Customer = {
+        id: generateId(),
+        name,
+        phone: (formData.get('phone') as string).trim() || undefined,
+        address: (formData.get('address') as string).trim() || undefined,
+        currentBalance: 0,
+        createdAt: now,
+        updatedAt: now
+      };
 
-    setManualCustomers(prev => [...prev, newCustomer]);
+      setManualCustomers(prev => [...prev, newCustomer]);
+      showToast('Customer added successfully');
+    }
     setIsCustomerFormOpen(false);
-    showToast('Customer added successfully');
+  };
+
+  const handleDeleteCustomer = (customer: Customer) => {
+    const hasTransactions = transactions.some(t => t.customerName?.trim() === customer.name.trim());
+    setConfirmData({
+      title: 'Delete Customer',
+      message: hasTransactions 
+        ? `This customer has transaction history. Removing them from the list won't erase transactions, but their profile will be gone. Continue?`
+        : 'Are you sure you want to delete this customer?',
+      onConfirm: () => {
+        setManualCustomers(prev => prev.filter(c => c.id !== customer.id));
+        showToast('Customer deleted');
+      }
+    });
   };
 
   const handleUpdateSettings = (e: React.FormEvent<HTMLFormElement>) => {
@@ -498,8 +534,9 @@ export default function App() {
     let runningBalance = 0;
     const historyWithBalance = customerHistory.map(t => {
       const cat = getCategory(t.type);
-      if (t.type === 'customer_due') runningBalance += t.amount;
-      else if (t.type === 'customer_payment') runningBalance -= t.amount;
+      // Balance increases on money "OUT" (Due/Credit) and decreases on money "IN" (Payment)
+      if (cat.direction === 'out') runningBalance += t.amount;
+      else runningBalance -= t.amount;
       return { ...t, runningBalance, cat };
     }).reverse();
 
@@ -622,7 +659,7 @@ export default function App() {
                   </div>
                   <p className="text-2xl font-bold tabular-nums">{formatCurrency(totals.dailyOut)}</p>
                 </div>
-                <div className={`card p-5 ${totals.dailyIn - totals.dailyOut >= 0 ? 'bg-indigo-600 text-white' : 'bg-rose-600 text-white shadow-lg shadow-rose-200'}`}>
+                <div className={`card p-5 ${totals.dailyIn - totals.dailyOut >= 0 ? 'bg-indigo-600' : 'bg-rose-600 shadow-lg shadow-rose-200'}`}>
                   <p className="text-sm opacity-80 mb-2 font-medium">Daily Net</p>
                   <p className="text-2xl font-bold tabular-nums">{formatCurrency(totals.dailyIn - totals.dailyOut)}</p>
                 </div>
@@ -792,8 +829,8 @@ export default function App() {
                   .filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()))
                   .sort((a, b) => b.currentBalance - a.currentBalance)
                   .map(c => (
-                  <div key={c.id} onClick={() => setSelectedCustomer(c.name)} className="card p-5 group flex justify-between items-center hover:border-indigo-200 transition-all cursor-pointer">
-                    <div className="flex items-center gap-4">
+                  <div key={c.id} className="card p-5 group flex justify-between items-center hover:border-indigo-200 transition-all">
+                    <div className="flex items-center gap-4 flex-1 cursor-pointer" onClick={() => setSelectedCustomer(c.name)}>
                       <div className="w-12 h-12 bg-neutral-100 group-hover:bg-indigo-50 text-neutral-400 group-hover:text-indigo-600 rounded-full flex items-center justify-center transition-colors">
                         <UserIcon size={24} />
                       </div>
@@ -804,11 +841,27 @@ export default function App() {
                         </p>
                       </div>
                     </div>
-                    <div className="text-right">
-                       <p className={`text-xl font-black ${c.currentBalance > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
-                         {formatCurrency(c.currentBalance)}
-                       </p>
-                       <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-widest">{c.currentBalance > 0 ? 'Due Balance' : 'Clear'}</p>
+                    <div className="flex items-center gap-6">
+                      <div className="text-right cursor-pointer" onClick={() => setSelectedCustomer(c.name)}>
+                        <p className={`text-xl font-black ${c.currentBalance > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                          {formatCurrency(c.currentBalance)}
+                        </p>
+                        <p className="text-[10px] text-neutral-400 font-bold uppercase tracking-widest">{c.currentBalance > 0 ? 'Due' : 'Clear'}</p>
+                      </div>
+                      <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); setEditingCustomer(c); setIsCustomerFormOpen(true); }}
+                          className="p-2 hover:bg-neutral-100 rounded-lg text-neutral-400 transition-colors"
+                        >
+                          <Edit2 size={16} />
+                        </button>
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); handleDeleteCustomer(c); }}
+                          className="p-2 hover:bg-rose-50 rounded-lg text-red-500 transition-colors"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -974,23 +1027,56 @@ export default function App() {
       )}
 
       {/* Customer Form Modal */}
-      <Modal isOpen={isCustomerFormOpen} onClose={() => setIsCustomerFormOpen(false)} title="Add New Customer">
+      <Modal 
+        isOpen={isCustomerFormOpen} 
+        onClose={() => { setIsCustomerFormOpen(false); setEditingCustomer(null); }} 
+        title={editingCustomer ? "Edit Customer" : "Add New Customer"}
+      >
         <form onSubmit={handleSaveCustomer} className="space-y-4">
           <div>
             <label className="block text-xs font-bold text-neutral-400 uppercase tracking-widest mb-1.5">Full Name</label>
-            <input name="name" type="text" required placeholder="Customer's full name" className="w-full card border-neutral-200 px-4 py-3 text-sm font-medium" />
+            <input 
+              name="name" 
+              type="text" 
+              required 
+              placeholder="Customer's full name" 
+              defaultValue={editingCustomer?.name}
+              className="w-full card border-neutral-200 px-4 py-3 text-sm font-medium" 
+            />
           </div>
           <div>
             <label className="block text-xs font-bold text-neutral-400 uppercase tracking-widest mb-1.5">Phone Number</label>
-            <input name="phone" type="tel" placeholder="+880" className="w-full card border-neutral-200 px-4 py-3 text-sm font-medium" />
+            <input 
+              name="phone" 
+              type="tel" 
+              placeholder="+880" 
+              defaultValue={editingCustomer?.phone}
+              className="w-full card border-neutral-200 px-4 py-3 text-sm font-medium" 
+            />
           </div>
           <div>
             <label className="block text-xs font-bold text-neutral-400 uppercase tracking-widest mb-1.5 flex items-center gap-1"><MapPin size={12}/> Address</label>
-            <textarea name="address" placeholder="Store or residential address" className="w-full card border-neutral-200 px-4 py-3 text-sm font-medium h-24" />
+            <textarea 
+              name="address" 
+              placeholder="Store or residential address" 
+              defaultValue={editingCustomer?.address}
+              className="w-full card border-neutral-200 px-4 py-3 text-sm font-medium h-24 resize-none" 
+            />
           </div>
           <div className="flex gap-2 pt-4">
-            <button type="button" onClick={() => setIsCustomerFormOpen(false)} className="flex-1 py-3 text-sm font-bold text-neutral-400 hover:bg-neutral-100 rounded-xl">Cancel</button>
-            <button type="submit" className="flex-[2] py-3 text-sm font-bold bg-indigo-600 text-white rounded-xl shadow-lg shadow-indigo-50">Create Customer</button>
+            <button 
+              type="button" 
+              onClick={() => { setIsCustomerFormOpen(false); setEditingCustomer(null); }} 
+              className="flex-1 py-3 text-sm font-bold text-neutral-400 hover:bg-neutral-100 rounded-xl"
+            >
+              Cancel
+            </button>
+            <button 
+              type="submit" 
+              className={`flex-[2] py-3 text-sm font-bold rounded-xl shadow-lg ${editingCustomer ? 'bg-amber-600 shadow-amber-100' : 'bg-indigo-600 shadow-indigo-100'} text-white`}
+            >
+              {editingCustomer ? 'Update Customer' : 'Create Customer'}
+            </button>
           </div>
         </form>
       </Modal>
