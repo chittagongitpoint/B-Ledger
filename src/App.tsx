@@ -161,7 +161,7 @@ const LoginPage = ({ settings, onLogin }: { settings: SystemSettings; onLogin: (
           <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-indigo-100 mb-4">
             <Receipt size={32} />
           </div>
-          <h1 className="text-2xl font-bold text-neutral-900 leading-tight">Beshob Ledger</h1>
+          <h1 className="text-2xl font-bold text-neutral-900 leading-tight">BDShop Ledger</h1>
           <p className="text-neutral-400 text-sm font-medium">Please login to your account</p>
         </div>
 
@@ -277,7 +277,7 @@ export default function App() {
   const [isCatModalOpen, setIsCatModalOpen] = useState(false);
 
   const [settings, setSettings] = useLocalStorage<SystemSettings>('settings', {
-    systemName: 'Beshob Ledger',
+    systemName: 'BDShop Ledger',
     userName: 'Admin',
     mobile: '01837131056',
     googleSheetUrl: import.meta.env.VITE_GOOGLE_SHEET_URL || ''
