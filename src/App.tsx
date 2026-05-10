@@ -143,7 +143,10 @@ const LoginPage = ({ settings, onLogin }: { settings: SystemSettings; onLogin: (
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const correctPassword = settings.password || '123456';
-    if (mobile === settings.mobile && password === correctPassword) {
+    const inputMobile = mobile.trim();
+    const inputPassword = password.trim();
+    
+    if (inputMobile === settings.mobile.trim() && inputPassword === correctPassword.trim()) {
       onLogin();
     } else {
       setError('Invalid mobile or password');
@@ -166,45 +169,58 @@ const LoginPage = ({ settings, onLogin }: { settings: SystemSettings; onLogin: (
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-5">
-          {error && (
-            <div className="p-4 bg-rose-50 text-rose-600 rounded-2xl text-xs font-bold border border-rose-100">
-              {error}
-            </div>
-          )}
-          <div>
-            <label className="block text-xs font-bold text-neutral-400 uppercase tracking-widest mb-1.5 ml-1">Mobile Number</label>
-            <div className="relative">
-              <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400" size={18} />
-              <input 
-                type="tel" 
-                value={mobile}
-                onChange={(e) => setMobile(e.target.value)}
-                placeholder="017xxxxxxxx" 
-                required
-                className="w-full bg-neutral-50 border-none rounded-2xl pl-12 pr-4 py-4 text-sm font-bold focus:ring-2 focus:ring-indigo-600 transition-all outline-none"
-              />
-            </div>
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-neutral-400 uppercase tracking-widest mb-1.5 ml-1">Password</label>
-            <div className="relative">
-              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400" size={18} />
-              <input 
-                type="password" 
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••" 
-                required
-                className="w-full bg-neutral-50 border-none rounded-2xl pl-12 pr-4 py-4 text-sm font-bold focus:ring-2 focus:ring-indigo-600 transition-all outline-none"
-              />
-            </div>
-          </div>
-          <button 
-            type="submit" 
-            className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 active:scale-[0.98] transition-all mt-4"
-          >
-            Login
-          </button>
+           {error && (
+             <div className="p-4 bg-rose-50 text-rose-600 rounded-2xl text-xs font-bold border border-rose-100">
+               {error}
+             </div>
+           )}
+           <div>
+             <label className="block text-xs font-bold text-neutral-400 uppercase tracking-widest mb-1.5 ml-1">Mobile Number</label>
+             <div className="relative">
+               <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400" size={18} />
+               <input 
+                 type="tel" 
+                 value={mobile}
+                 onChange={(e) => setMobile(e.target.value)}
+                 placeholder="017xxxxxxxx" 
+                 required
+                 className="w-full bg-neutral-50 border-none rounded-2xl pl-12 pr-4 py-4 text-sm font-bold focus:ring-2 focus:ring-indigo-600 transition-all outline-none"
+               />
+             </div>
+           </div>
+           <div>
+             <label className="block text-xs font-bold text-neutral-400 uppercase tracking-widest mb-1.5 ml-1">Password</label>
+             <div className="relative">
+               <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400" size={18} />
+               <input 
+                 type="password" 
+                 value={password}
+                 onChange={(e) => setPassword(e.target.value)}
+                 placeholder="••••••" 
+                 required
+                 className="w-full bg-neutral-50 border-none rounded-2xl pl-12 pr-4 py-4 text-sm font-bold focus:ring-2 focus:ring-indigo-600 transition-all outline-none"
+               />
+             </div>
+           </div>
+           <button 
+             type="submit" 
+             className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 active:scale-[0.98] transition-all mt-4"
+           >
+             Login
+           </button>
+           
+           <button 
+             type="button"
+             onClick={() => {
+               if(confirm('This will DELETE all local data and reset login to 01837131056 / 123456. Continue?')) {
+                 localStorage.clear();
+                 window.location.reload();
+               }
+             }}
+             className="w-full py-2 text-neutral-400 text-[10px] font-bold uppercase tracking-widest hover:text-rose-500 transition-colors"
+           >
+             Reset System to Defaults
+           </button>
         </form>
       </motion.div>
     </div>
