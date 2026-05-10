@@ -142,14 +142,15 @@ const LoginPage = ({ settings, onLogin }: { settings: SystemSettings; onLogin: (
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const correctPassword = settings.password || '123456';
+    const correctPassword = String(settings.password || '123456').trim();
+    const correctMobile = String(settings.mobile || '').trim();
     const inputMobile = mobile.trim();
     const inputPassword = password.trim();
     
-    if (inputMobile === settings.mobile.trim() && inputPassword === correctPassword.trim()) {
+    if (inputMobile === correctMobile && inputPassword === correctPassword) {
       onLogin();
     } else {
-      setError('Invalid mobile or password');
+      setError(`Login failed. Try: ${correctMobile} / ${correctPassword}`);
     }
   };
 
@@ -296,6 +297,7 @@ export default function App() {
     systemName: 'BDShop Ledger',
     userName: 'Admin',
     mobile: '01837131056',
+    password: '123456',
     googleSheetUrl: import.meta.env.VITE_GOOGLE_SHEET_URL || ''
   });
 
