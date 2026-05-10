@@ -179,7 +179,7 @@ const LoginPage = ({ settings, onLogin }: { settings: SystemSettings; onLogin: (
                 type="tel" 
                 value={mobile}
                 onChange={(e) => setMobile(e.target.value)}
-                placeholder={settings.mobile} 
+                placeholder="017xxxxxxxx" 
                 required
                 className="w-full bg-neutral-50 border-none rounded-2xl pl-12 pr-4 py-4 text-sm font-bold focus:ring-2 focus:ring-indigo-600 transition-all outline-none"
               />
