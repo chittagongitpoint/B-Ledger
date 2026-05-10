@@ -42,6 +42,7 @@ export interface SystemSettings {
   userName: string;
   mobile: string;
   password?: string;
+  googleSheetUrl?: string;
 }
 
 export const TRANSACTION_TYPES: Record<TransactionType, { label: string; direction: 'in' | 'out'; color: string }> = {

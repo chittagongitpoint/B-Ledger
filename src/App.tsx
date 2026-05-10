@@ -24,7 +24,9 @@ import {
   Settings,
   MapPin,
   Lock,
-  PlusCircle
+  PlusCircle,
+  Cloud,
+  RefreshCw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { format, parseISO, startOfDay, isSameDay, isWithinInterval, startOfWeek, endOfWeek, subDays } from 'date-fns';
@@ -105,14 +107,18 @@ interface ConfirmModalProps {
   onConfirm: () => void;
   title: string;
   message: string;
+  confirmLabel?: string;
+  confirmColor?: string;
 }
 
-const ConfirmModal = ({ isOpen, onClose, onConfirm, title, message }: ConfirmModalProps) => (
+const ConfirmModal = ({ isOpen, onClose, onConfirm, title, message, confirmLabel = 'Confirm', confirmColor = 'bg-rose-600' }: ConfirmModalProps) => (
   <Modal isOpen={isOpen} onClose={onClose} title={title}>
     <div className="space-y-6">
-      <div className="p-4 bg-rose-50 rounded-2xl text-rose-600 flex items-start gap-3">
-        <Trash2 className="shrink-0" size={24} />
-        <p className="text-sm font-medium">{message}</p>
+      <div className="p-4 bg-neutral-50 rounded-2xl text-neutral-600 flex items-start gap-3">
+        <div className={`p-2 rounded-lg ${confirmColor} text-white`}>
+          <Trash2 size={20} />
+        </div>
+        <p className="text-sm font-medium leading-relaxed">{message}</p>
       </div>
       <div className="flex gap-3">
         <button onClick={onClose} className="flex-1 py-4 bg-neutral-100 text-neutral-500 rounded-2xl font-bold text-sm">
@@ -120,9 +126,9 @@ const ConfirmModal = ({ isOpen, onClose, onConfirm, title, message }: ConfirmMod
         </button>
         <button 
           onClick={() => { onConfirm(); onClose(); }} 
-          className="flex-1 py-4 bg-rose-600 text-white rounded-2xl font-bold text-sm shadow-lg shadow-rose-100"
+          className={`flex-1 py-4 ${confirmColor} text-white rounded-2xl font-bold text-sm shadow-lg`}
         >
-          Confirm Delete
+          {confirmLabel}
         </button>
       </div>
     </div>
@@ -258,7 +264,13 @@ export default function App() {
   
   // Notification system
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
-  const [confirmData, setConfirmData] = useState<{ title: string; message: string; onConfirm: () => void } | null>(null);
+  const [confirmData, setConfirmData] = useState<{ 
+    title: string; 
+    message: string; 
+    onConfirm: () => void;
+    confirmLabel?: string;
+    confirmColor?: string;
+  } | null>(null);
 
   const showToast = (message: string, type: 'success' | 'error' = 'success') => setToast({ message, type });
 
@@ -267,7 +279,8 @@ export default function App() {
   const [settings, setSettings] = useLocalStorage<SystemSettings>('settings', {
     systemName: 'Beshob Ledger',
     userName: 'Admin',
-    mobile: '01837131056'
+    mobile: '01837131056',
+    googleSheetUrl: ''
   });
 
   const [categories, setCategories] = useLocalStorage<TransactionCategory[]>('categories', 
@@ -414,7 +427,9 @@ export default function App() {
       onConfirm: () => {
         setTransactions(prev => prev.filter(t => t.id !== id));
         showToast('Transaction deleted successfully');
-      }
+      },
+      confirmLabel: 'Delete Forever',
+      confirmColor: 'bg-rose-600'
     });
   };
 
@@ -465,8 +480,75 @@ export default function App() {
       onConfirm: () => {
         setManualCustomers(prev => prev.filter(c => c.id !== customer.id));
         showToast('Customer deleted');
-      }
+      },
+      confirmLabel: 'Delete Customer',
+      confirmColor: 'bg-rose-600'
     });
+  };
+
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  const syncToCloud = async (overrideUrl?: string) => {
+    const url = overrideUrl || settings.googleSheetUrl;
+    if (!url) return;
+
+    setIsSyncing(true);
+    try {
+      // Sync Transactions
+      await fetch(url, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'sync_transactions', payload: transactions })
+      });
+
+      // Sync Customers
+      await fetch(url, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'sync_customers', payload: manualCustomers })
+      });
+
+      // Sync Settings
+      await fetch(url, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'sync_settings', payload: settings })
+      });
+      
+      showToast('Cloud sync complete');
+    } catch (error) {
+      console.error('Sync failed:', error);
+      showToast('Sync failed. Check URL.', 'error');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const fetchFromCloud = async () => {
+    if (!settings.googleSheetUrl) return;
+
+    setIsSyncing(true);
+    try {
+      const response = await fetch(settings.googleSheetUrl);
+      const data = await response.json();
+      
+      if (data.transactions) setTransactions(data.transactions);
+      if (data.customers) setManualCustomers(data.customers);
+      if (data.settings) {
+        // Preserve the current Google Sheet URL even when importing
+        setSettings({ ...data.settings, googleSheetUrl: settings.googleSheetUrl });
+      }
+      
+      showToast('Data imported from cloud');
+    } catch (error) {
+      console.error('Fetch failed:', error);
+      showToast('Cloud import failed', 'error');
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   const handleUpdateSettings = (e: React.FormEvent<HTMLFormElement>) => {
@@ -477,6 +559,7 @@ export default function App() {
       systemName: formData.get('systemName') as string,
       userName: formData.get('userName') as string,
       mobile: formData.get('mobile') as string,
+      googleSheetUrl: formData.get('googleSheetUrl') as string,
       password: formData.get('password') as string || settings.password,
     });
     showToast('Settings updated successfully');
@@ -516,7 +599,9 @@ export default function App() {
       onConfirm: () => {
         setCategories(prev => prev.filter(c => c.id !== id));
         showToast('Transaction type deleted');
-      }
+      },
+      confirmLabel: 'Delete Category',
+      confirmColor: 'bg-rose-600'
     });
   };
 
@@ -902,20 +987,71 @@ export default function App() {
                   </label>
                   <input name="password" type="password" placeholder="Leave blank to keep current" className="w-full card border-neutral-200 px-4 py-3 text-sm font-medium" />
                 </div>
-                <div className="flex gap-3 mt-2">
+                <div>
+                  <label className="block text-xs font-bold text-neutral-400 uppercase tracking-widest mb-1.5 flex items-center gap-2">
+                    <Cloud size={14} /> Google Sheet API URL
+                  </label>
+                  <input 
+                    name="googleSheetUrl" 
+                    type="url" 
+                    defaultValue={settings.googleSheetUrl} 
+                    placeholder="https://script.google.com/macros/s/.../exec"
+                    className="w-full card border-neutral-200 px-4 py-3 text-sm font-medium" 
+                  />
+                  <p className="text-[10px] text-neutral-400 mt-1 font-medium italic">Paste your Apps Script Web App URL here for cloud backup.</p>
+                </div>
+
+                <div className="flex gap-3 mt-4">
                    <button type="submit" className="flex-[2] py-3 bg-indigo-600 text-white rounded-xl font-bold text-sm shadow-lg shadow-indigo-100">
-                     Update Profile
+                     Update Settings
                    </button>
-                   <button 
+                   {settings.googleSheetUrl && (
+                     <button 
+                       type="button" 
+                       onClick={() => syncToCloud()}
+                       disabled={isSyncing}
+                       className="flex-1 py-3 bg-emerald-50 text-emerald-600 rounded-xl font-bold text-sm flex items-center justify-center gap-2"
+                     >
+                       {isSyncing ? <RefreshCw size={14} className="animate-spin" /> : <Cloud size={14} />}
+                       Sync
+                     </button>
+                   )}
+                </div>
+                
+                {settings.googleSheetUrl && (
+                  <button 
                     type="button" 
                     onClick={() => {
-                      if(confirm('Are you sure you want to logout?')) setIsLoggedIn(false);
+                      setConfirmData({
+                        title: 'Import Cloud Data',
+                        message: 'This will replace ALL local data with data from your Google Sheet. This action cannot be undone. Continue?',
+                        confirmLabel: 'Import Now',
+                        confirmColor: 'bg-indigo-600',
+                        onConfirm: () => fetchFromCloud()
+                      });
                     }}
-                    className="flex-1 py-3 bg-rose-50 text-rose-600 rounded-xl font-bold text-sm"
-                   >
-                     Logout
-                   </button>
-                </div>
+                    disabled={isSyncing}
+                    className="w-full py-3 bg-neutral-100 text-neutral-500 rounded-xl font-bold text-xs mt-2"
+                  >
+                    Import from Google Sheet
+                  </button>
+                )}
+                
+                <button 
+                  type="button" 
+                  onClick={() => {
+                    setConfirmData({
+                      title: 'Logout Account',
+                      message: 'Are you sure you want to logout from your account?',
+                      confirmLabel: 'Logout',
+                      confirmColor: 'bg-rose-600',
+                      onConfirm: () => setIsLoggedIn(false)
+                    });
+                  }}
+                  className="w-full py-3 bg-rose-50 text-rose-600 rounded-xl font-bold text-sm mt-4"
+                >
+                  Logout Account
+                </button>
               </form>
             </section>
 
@@ -1023,6 +1159,8 @@ export default function App() {
           onConfirm={confirmData.onConfirm}
           title={confirmData.title}
           message={confirmData.message}
+          confirmLabel={confirmData.confirmLabel}
+          confirmColor={confirmData.confirmColor}
         />
       )}
 
