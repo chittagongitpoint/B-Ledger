@@ -280,7 +280,7 @@ export default function App() {
     systemName: 'Beshob Ledger',
     userName: 'Admin',
     mobile: '01837131056',
-    googleSheetUrl: ''
+    googleSheetUrl: import.meta.env.VITE_GOOGLE_SHEET_URL || ''
   });
 
   const [categories, setCategories] = useLocalStorage<TransactionCategory[]>('categories', 
